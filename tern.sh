@@ -1,28 +1,39 @@
+#!/bin/bash
+
+# Ask for executor user
 read -p "Masukkan nama user untuk menjalankan executor (default: root): " EXECUTOR_USER
 EXECUTOR_USER=${EXECUTOR_USER:-root}
 
+# Ask for private key (securely)
 read -sp "Masukkan PRIVATE_KEY_LOCAL: " PRIVATE_KEY_LOCAL
 echo ""
 
+# Set directory paths
 INSTALL_DIR="/home/$EXECUTOR_USER/t3rn"
 SERVICE_FILE="/etc/systemd/system/t3rn-executor.service"
 ENV_FILE="/etc/t3rn-executor.env"
 
+# Create installation directory and navigate to it
 mkdir -p "$INSTALL_DIR" && cd "$INSTALL_DIR"
 
+# Get latest release tag
 TAG=$(curl -s https://api.github.com/repos/t3rn/executor-release/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
-wget "https://github.com/t3rn/executor-release/releases/download/$TAG/executor-linux-$TAG.tar.gz"
 
-tar -xzf executor-linux-*.tar.gz
+# Download and extract the release
+wget "https://github.com/t3rn/executor-release/releases/download/$TAG/executor-linux-$TAG.tar.gz"
+tar -xzf "executor-linux-$TAG.tar.gz"
 cd executor/executor/bin
 
+# Create environment file with RPC endpoints
 sudo bash -c "cat > $ENV_FILE" <<EOL
 RPC_ENDPOINTS="{\"l2rn\": [\"https://b2n.rpc.caldera.xyz/http\"], \"arbt\": [\"https://arbitrum-sepolia.drpc.org\", \"https://sepolia-rollup.arbitrum.io/rpc\"], \"bast\": [\"https://base-sepolia-rpc.publicnode.com\", \"https://base-sepolia.drpc.org\"], \"opst\": [\"https://sepolia.optimism.io\", \"https://optimism-sepolia.drpc.org\"], \"unit\": [\"https://unichain-sepolia.drpc.org\", \"https://sepolia.unichain.org\"]}"
 EOL
 
+# Set proper ownership and permissions
 sudo chown -R "$EXECUTOR_USER":"$EXECUTOR_USER" "$INSTALL_DIR"
 sudo chmod 600 "$ENV_FILE"
 
+# Create service file
 sudo bash -c "cat > $SERVICE_FILE" <<EOL
 [Unit]
 Description=t3rn Executor Service
@@ -50,6 +61,7 @@ Environment=EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=true
 WantedBy=multi-user.target
 EOL
 
+# Reload systemd, enable and start the service
 sudo systemctl daemon-reload
 sudo systemctl enable t3rn-executor.service
 sudo systemctl start t3rn-executor.service
